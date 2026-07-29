@@ -1,12 +1,33 @@
 # Tracklume API
 
-Tracklume adalah REST API MVP untuk task, bug, dan feature request dalam sebuah project.
+Tracklume adalah backend REST API untuk membantu tim mencatat, mengatur, dan memantau pekerjaan dalam sebuah project. Tracklume menangani tiga jenis pekerjaan utama: task, bug, dan feature request.
+
+Project ini dirancang sebagai backend terpisah yang dapat digunakan oleh web app, mobile app, atau frontend lain melalui HTTP dan JSON. Fokusnya adalah menyediakan fondasi issue tracker yang sederhana, aman, dan mudah di-deploy ke VPS.
 
 **Tracklume — Track tasks, bugs, and product ideas clearly.**
 
 Kelola tugas, bug, dan ide produk dengan lebih terarah.
 
 Repository: `github.com/Basith-08/tracklume-api`
+
+## Apa yang disediakan
+
+- Authentication berbasis JWT: register, login, profil pengguna, dan perubahan password.
+- Project management: project, anggota, role owner/admin/member/viewer, archive, dan authorization berbasis membership.
+- Issue tracking: task, bug, feature, status Kanban, priority, assignee, reporter, due date, pencarian, filter, sorting, dan pagination.
+- Issue activity: riwayat perubahan penting pada issue seperti status, priority, assignee, due date, dan penghapusan.
+- Project dashboard: ringkasan issue aktif, distribusi status/priority/type, overdue, due dalam tujuh hari, issue terbaru, dan progress.
+- Operational endpoints: healthcheck, readiness database, structured logging, CORS, request ID, timeout, recovery, dan rate limit auth.
+
+## Alur penggunaan
+
+1. Pengguna melakukan register atau login dan memperoleh access token.
+2. Pengguna membuat project; otomatis menjadi owner project tersebut.
+3. Owner menambahkan anggota dan memberikan role sesuai kebutuhan.
+4. Member membuat issue dan mengelolanya melalui status Kanban.
+5. Dashboard dan activity endpoint digunakan frontend untuk menampilkan progres serta riwayat pekerjaan.
+
+Tracklume tidak menyediakan UI frontend. Frontend terpisah cukup menggunakan base URL API, mengirim `Authorization: Bearer <access_token>`, dan mengikuti response envelope yang dijelaskan pada dokumentasi API.
 
 ## Teknologi dan arsitektur
 
