@@ -1,63 +1,123 @@
 # Tracklume API
 
-Tracklume adalah backend REST API untuk membantu tim mencatat, mengatur, dan memantau pekerjaan dalam sebuah project. Tracklume menangani tiga jenis pekerjaan utama: task, bug, dan feature request.
-
-Project ini dirancang sebagai backend terpisah yang dapat digunakan oleh web app, mobile app, atau frontend lain melalui HTTP dan JSON. Fokusnya adalah menyediakan fondasi issue tracker yang sederhana, aman, dan mudah di-deploy ke VPS.
-
 **Tracklume — Track tasks, bugs, and product ideas clearly.**
 
 Kelola tugas, bug, dan ide produk dengan lebih terarah.
 
-Repository: `github.com/Basith-08/tracklume-api`
+Tracklume adalah backend REST API untuk mencatat, mengatur, dan memantau pekerjaan dalam sebuah project. API ini mendukung task, bug, dan feature request, lalu menyediakan status Kanban, assignment, activity history, dan project dashboard.
 
-## Fitur utama
+Tracklume dirancang sebagai service backend terpisah yang dapat digunakan oleh web app, mobile app, atau frontend lain melalui HTTP dan JSON.
 
-- Authentication berbasis JWT: register, login, profil pengguna, dan perubahan password.
-- Project management: project, anggota, role owner/admin/member/viewer, archive, dan authorization berbasis membership.
-- Issue tracking: task, bug, feature, status Kanban, priority, assignee, reporter, due date, pencarian, filter, sorting, dan pagination.
-- Issue activity: riwayat perubahan penting pada issue seperti status, priority, assignee, due date, dan penghapusan.
-- Project dashboard: ringkasan issue aktif, distribusi status/priority/type, overdue, due dalam tujuh hari, issue terbaru, dan progress.
-- Operational endpoints: healthcheck, readiness database, structured logging, CORS, request ID, timeout, recovery, dan rate limit auth.
+Repository: [`Basith-08/tracklume-api`](https://github.com/Basith-08/tracklume-api)
 
-## Alur penggunaan
+## Daftar isi
 
-1. Pengguna melakukan register atau login dan memperoleh access token.
-2. Pengguna membuat project; otomatis menjadi owner project tersebut.
-3. Owner menambahkan anggota dan memberikan role sesuai kebutuhan.
-4. Member membuat issue dan mengelolanya melalui status Kanban.
-5. Dashboard dan activity endpoint digunakan frontend untuk menampilkan progres serta riwayat pekerjaan.
+- [Fitur](#fitur)
+- [Teknologi dan arsitektur](#teknologi-dan-arsitektur)
+- [Menjalankan local](#menjalankan-local)
+- [API dan dokumentasi](#api-dan-dokumentasi)
+- [Konfigurasi](#konfigurasi)
+- [Authorization](#authorization)
+- [Database dan migration](#database-dan-migration)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [Demo credentials](#demo-credentials)
+- [Batas MVP](#batas-mvp)
 
-Tracklume tidak menyediakan UI frontend. Frontend terpisah cukup menggunakan base URL API, mengirim `Authorization: Bearer <access_token>`, dan mengikuti response envelope yang dijelaskan pada dokumentasi API.
+## Fitur
+
+- **Authentication** — register, login, profil pengguna, perubahan profil, dan perubahan password dengan JWT.
+- **Project management** — membuat project, mengelola anggota, role owner/admin/member/viewer, archive, dan akses berbasis membership.
+- **Issue tracking** — task, bug, feature, status Kanban, priority, assignee, reporter, due date, pencarian, filter, sorting, dan pagination.
+- **Issue activity** — riwayat perubahan title, status, priority, assignee, due date, pembuatan, dan penghapusan issue.
+- **Dashboard** — total issue aktif, distribusi status/priority/type, overdue, due dalam tujuh hari, issue terbaru, dan progress percentage.
+- **Operational readiness** — healthcheck, readiness database, structured logging, request ID, CORS, timeout, panic recovery, body limit, dan rate limit auth.
+
+Tracklume tidak menyediakan UI frontend. Frontend terpisah menggunakan base URL API, mengirim `Authorization: Bearer <access_token>`, dan membaca response envelope yang dijelaskan di bawah.
 
 ## Teknologi dan arsitektur
 
-- Go, chi, pgx/v5, PostgreSQL, JWT, bcrypt, validator, dan `slog`.
-- Alur request: handler → service → repository → PostgreSQL.
-- `internal/auth`, `internal/project`, `internal/issue`, dan `internal/dashboard` memisahkan domain; `internal/middleware` menangani request ID, logging, CORS, auth, timeout, recovery, dan rate limit.
-- Migration SQL berada di `migrations/`; executable ada di `cmd/api`, `cmd/migrate`, dan `cmd/seed`.
+| Area | Teknologi |
+| --- | --- |
+| Language | Go 1.25+ |
+| HTTP router | chi |
+| Database | PostgreSQL 16+ |
+| PostgreSQL driver | pgx/v5 |
+| Authentication | JWT |
+| Password hashing | bcrypt |
+| Validation | go-playground/validator |
+| Logging | `log/slog` |
+| Deployment | Docker multi-stage, GHCR, GitHub Actions, Traefik |
 
-## Quick start local
+Alur request utama:
 
-Go 1.25+, Docker Compose, dan PostgreSQL 16+ diperlukan. `.env` tidak di-commit dan tidak dibaca otomatis oleh Go; salin template lalu export isinya ke shell:
+```text
+HTTP request
+    ↓
+Handler → Service → Repository → PostgreSQL
+```
 
-Dengan PostgreSQL lokal:
+Tanggung jawab layer dibuat sederhana dan eksplisit:
+
+- **Handler** menangani HTTP, parsing, validasi awal, dan response.
+- **Service** menangani business rule, authorization, dan transaction boundary.
+- **Repository** menangani query PostgreSQL terparameterisasi.
+- **Middleware** menangani request ID, logging, recovery, CORS, authentication, timeout, dan rate limit.
+
+Struktur folder utama:
+
+```text
+cmd/api       # HTTP server
+cmd/migrate   # database migration runner
+cmd/seed      # development seeder
+internal/     # domain, service, repository, middleware, config
+migrations/   # SQL migration up/down
+openapi.yaml  # API contract
+tests/        # PostgreSQL integration tests
+```
+
+## Menjalankan local
+
+### Requirement
+
+- Go 1.25 atau lebih baru
+- Docker Engine dan Docker Compose plugin
+- PostgreSQL 16 atau lebih baru jika tidak memakai container database
+
+### Quick start dengan PostgreSQL Compose
+
+> `.env` tidak di-commit. Untuk command Go yang berjalan dari host, gunakan `DB_HOST=localhost`. Compose otomatis menggunakan hostname internal `db` untuk container API.
 
 ```bash
 cp .env.example .env
-# Sesuaikan DB_HOST=localhost jika PostgreSQL berjalan di host.
-set -a; . ./.env; set +a
-export DATABASE_URL='postgres://tracklume:tracklume@localhost:5432/tracklume?sslmode=disable'
-export JWT_SECRET='local-only-secret-with-at-least-32-characters'
+docker compose up -d db
+make migrate-up
+make seed
+make run
+```
+
+API tersedia di `http://localhost:8080`.
+
+Verifikasi:
+
+```bash
+curl http://localhost:8080/health
+curl http://localhost:8080/ready
+```
+
+### Menjalankan tanpa Makefile
+
+```bash
+set -a
+. ./.env
+set +a
+
 go run ./cmd/migrate up
 go run ./cmd/seed
 go run ./cmd/api
 ```
 
-Jika memakai Makefile, `make run`, `make migrate-up`, `make migrate-down`, dan `make seed` otomatis membaca `.env`. Cek konfigurasi dengan `docker compose config`; Compose akan gagal jelas jika `.env` belum dibuat atau variable image/domain belum diisi.
-
-Dengan Compose, isi `.env` dan jalankan `docker compose up -d db`. PostgreSQL menggunakan named volume Docker `tracklume-api-db-data` dan publish loopback `127.0.0.1:5432`, sehingga command Go dari host dapat memakai `DB_HOST=localhost`; port database tidak dipublish ke interface eksternal. Volume lama dari template sebelumnya tidak disentuh. Jalankan migration melalui `docker compose run --rm --no-deps --entrypoint /app/tracklume-migrate api up` setelah image tersedia. Untuk development dari source, command Makefile berikut tersedia:
-
-Perintah Makefile yang tersedia:
+### Perintah Makefile
 
 ```bash
 make run
@@ -70,17 +130,13 @@ make seed
 make docker-build
 ```
 
-Seeder bersifat idempotent dan hanya untuk local demo. Credential demo: `owner@tracklume.local` / `Password123!` dan `member@tracklume.local` / `Password123!`.
-
-## Environment variables
-
-`APP_ENV`, `APP_PORT` (default `8080`), `APP_BASE_URL`, `JWT_SECRET`, `JWT_EXPIRATION`, `CORS_ALLOWED_ORIGINS`, `REQUEST_TIMEOUT`, `SHUTDOWN_TIMEOUT`, `BODY_LIMIT_BYTES`, `AUTH_RATE_LIMIT_REQUESTS`, dan `AUTH_RATE_LIMIT_WINDOW` mengatur API. Database dapat memakai `DATABASE_URL`, atau `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `DB_HOST`, `DB_PORT`, dan `DB_SSLMODE`. Compose production juga membutuhkan `IMAGE_TAG`, `GHCR_OWNER`, dan `PLATFORM_DOMAIN`.
-
-Jangan commit `.env`. Production wajib memakai JWT secret acak; aplikasi menolak secret pendek ketika `APP_ENV=production`.
+`make run`, `make migrate-up`, `make migrate-down`, dan `make seed` membaca `.env` secara otomatis.
 
 ## API dan dokumentasi
 
-Base prefix API adalah `/api/v1`. Endpoint health dan authentication berikut dapat diakses tanpa token:
+Base prefix API adalah `/api/v1`.
+
+### Public endpoints
 
 ```text
 GET  /health
@@ -89,13 +145,13 @@ POST /api/v1/auth/register
 POST /api/v1/auth/login
 ```
 
-Endpoint yang membutuhkan authentication menggunakan header:
+### Authenticated endpoints
+
+Gunakan header berikut pada endpoint yang membutuhkan login:
 
 ```http
 Authorization: Bearer <access_token>
 ```
-
-Endpoint utama:
 
 ```text
 GET|PATCH /api/v1/me
@@ -116,19 +172,28 @@ GET       /api/v1/projects/{projectID}/issues/{issueID}/activities
 GET       /api/v1/projects/{projectID}/dashboard
 ```
 
-Filter issue mendukung `search`, `status`, `priority`, `type`, `assignee_id`, `reporter_id`, `due_before`, `due_after`, `sort`, `page`, dan `per_page` dengan maksimum `100` item per halaman.
+Filter issue mendukung:
 
-Swagger UI tersedia di `GET /docs`, misalnya [http://localhost:8080/docs](http://localhost:8080/docs). Spesifikasi OpenAPI tersedia di [openapi.yaml](openapi.yaml) dan endpoint `GET /openapi.yaml`. Swagger UI menggunakan asset CDN `unpkg.com`.
+```text
+search, status, priority, type, assignee_id, reporter_id,
+due_before, due_after, sort, page, per_page
+```
+
+`per_page` dibatasi maksimum `100`.
+
+### Response format
 
 Response tunggal:
 
 ```json
 {
-  "data": {}
+  "data": {
+    "id": "uuid"
+  }
 }
 ```
 
-Response collection menambahkan metadata pagination:
+Response collection:
 
 ```json
 {
@@ -142,26 +207,166 @@ Response collection menambahkan metadata pagination:
 }
 ```
 
-Error memakai format konsisten dengan `code`, `message`, optional `fields`, dan `request_id`.
+Response error:
 
-Panduan GitHub Actions, DNS, Traefik, dan VPS ada di [DEPLOYMENT.md](DEPLOYMENT.md).
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed",
+    "fields": {
+      "title": ["Title is required"]
+    },
+    "request_id": "uuid"
+  }
+}
+```
 
-## Authorization dan keputusan desain
+Dokumentasi tersedia di:
 
-Project hanya terlihat oleh member. Owner memiliki akses penuh; admin mengelola issue/member tetapi tidak owner; member mengelola issue; viewer hanya membaca. Hanya owner yang dapat mengarsipkan project. `DELETE /projects/{id}` melakukan soft archive, sedangkan `DELETE /issues/{id}` melakukan soft delete agar activity history tetap tersedia. Assignee harus member project.
+- Swagger UI: [http://localhost:8080/docs](http://localhost:8080/docs)
+- OpenAPI: [openapi.yaml](openapi.yaml)
+- Raw OpenAPI endpoint: `GET /openapi.yaml`
 
-Sequence issue memakai row counter dan `SELECT ... FOR UPDATE`-equivalent atomic update dalam transaction; identifier menjadi `PROJECTKEY-N`. Activity dibuat untuk create, perubahan title/status/priority/assignee/due date, dan delete. Dashboard mengecualikan issue cancelled dari progress serta aman ketika denominator nol.
+Swagger UI menggunakan asset CDN `unpkg.com`.
 
-## Migration, health, dan deployment
+## Konfigurasi
 
-Migration dijalankan eksplisit dengan `go run ./cmd/migrate up|down`. API melakukan retry koneksi database saat startup. `/health` hanya memeriksa process, sedangkan `/ready` melakukan ping database. Shutdown menangani SIGINT/SIGTERM, timeout, dan penutupan pool.
+Salin `.env.example` menjadi `.env`, lalu sesuaikan nilainya.
 
-Dockerfile memakai build multi-stage, binary statis, runtime Alpine non-root, dan membawa migration files. Compose mempertahankan network Traefik `edge`, private `tracklume-api-internal`, volume PostgreSQL persisten, hostname `api-tracklume.${PLATFORM_DOMAIN}`, dan port `8080`. Workflow GitHub Actions menjalankan tidy verification, vet, test PostgreSQL, build, push image ke GHCR, migration eksplisit, deploy SSH, dan health verification. Production menjalankan image yang sudah dibangun, bukan source.
+| Variable | Keterangan |
+| --- | --- |
+| `APP_ENV` | `development` atau `production` |
+| `APP_PORT` | Port HTTP API, default `8080` |
+| `APP_BASE_URL` | Base URL API |
+| `DATABASE_URL` | DSN PostgreSQL opsional; diprioritaskan jika diisi |
+| `POSTGRES_USER` | User database |
+| `POSTGRES_PASSWORD` | Password database |
+| `POSTGRES_DB` | Nama database |
+| `DB_HOST` | `localhost` untuk command host, `db` di Compose |
+| `DB_PORT` | Default `5432` |
+| `DB_SSLMODE` | `disable` untuk local; sesuaikan production |
+| `JWT_SECRET` | Secret JWT; wajib panjang dan random di production |
+| `JWT_EXPIRATION` | Contoh `1h` |
+| `CORS_ALLOWED_ORIGINS` | Origin frontend, bukan wildcard production |
+| `REQUEST_TIMEOUT` | Contoh `15s` |
+| `SHUTDOWN_TIMEOUT` | Contoh `10s` |
+| `IMAGE_TAG` | Tag image GHCR untuk Compose production |
+| `GHCR_OWNER` | Owner image lowercase, contoh `basith-08` |
+| `PLATFORM_DOMAIN` | Domain tanpa `https://`, contoh `example.com` |
 
-Frontend dapat memakai `APP_BASE_URL` atau hostname production sebagai base URL, menyimpan access token secara aman, mengirim Bearer token, dan membaca envelope response di atas. Tidak ada refresh token server-side pada MVP.
+Production menolak `JWT_SECRET` yang terlalu pendek. Jangan commit `.env` atau memasukkan password, JWT secret, dan private key ke repository.
 
-## Testing dan batas MVP
+## Authorization
 
-`go test ./...` menjalankan unit/handler tests. Integration test PostgreSQL dijalankan jika `TEST_DATABASE_URL` di-set; workflow menyediakan PostgreSQL service dan menjalankan migration lebih dahulu. `go vet ./...` adalah lint baseline.
+Resource project hanya terlihat oleh anggota project.
 
-Di luar MVP: workspace multi-tenant, OAuth, refresh token kompleks, invitation email, comment, attachment, notification, WebSocket, subtask, sprint, time tracking, custom status/field, billing, dan microservice.
+| Role | Hak akses |
+| --- | --- |
+| `owner` | Akses penuh, termasuk archive project dan pengelolaan owner policy |
+| `admin` | Mengelola issue dan anggota, tetapi tidak dapat menghapus owner |
+| `member` | Membuat dan mengubah issue |
+| `viewer` | Hanya membaca |
+
+Aturan tambahan:
+
+- Pembuat project otomatis menjadi member dengan role `owner`.
+- Hanya owner yang dapat mengarsipkan project.
+- Assignee issue harus menjadi anggota project yang sama.
+- Resource dari project lain tidak dapat diakses hanya dengan menebak UUID.
+- `DELETE /projects/{id}` melakukan archive/soft delete.
+- `DELETE /issues/{id}` melakukan soft delete agar activity history tetap tersedia.
+
+## Database dan migration
+
+Migration dijalankan secara eksplisit:
+
+```bash
+go run ./cmd/migrate up
+go run ./cmd/migrate down
+```
+
+Tabel utama:
+
+```text
+users
+projects
+project_members
+project_issue_counters
+issues
+issue_activities
+```
+
+Nomor issue dibuat per project secara atomic sehingga identifier berbentuk `PROJECTKEY-1`, `PROJECTKEY-2`, dan seterusnya tanpa race condition.
+
+Seeder hanya untuk development, bersifat idempotent, dan tidak dijalankan otomatis pada production.
+
+## Testing
+
+```bash
+go test ./...
+go vet ./...
+```
+
+Unit dan handler test dapat dijalankan tanpa database. PostgreSQL integration test dijalankan jika `TEST_DATABASE_URL` tersedia; GitHub Actions menyediakan PostgreSQL service dan menjalankan migration sebelum test.
+
+Docker image dapat dibangun dengan:
+
+```bash
+docker build -t tracklume-api:local .
+```
+
+Image menggunakan multi-stage build, binary static, runtime minimal, dan user non-root.
+
+## Deployment
+
+Deployment production menggunakan image yang sudah dibangun di GHCR, bukan build source di server.
+
+Workflow GitHub Actions melakukan:
+
+1. `go mod tidy` verification, `go vet`, test PostgreSQL, dan build.
+2. Build dan push image dengan tag commit SHA ke GHCR.
+3. SSH ke VPS menggunakan `PROD_DEPLOY_KEY`.
+4. Upload `compose.yaml` dan `.env.example` ke `PROD_APP_DIR`.
+5. Membuat `.env` dari `.env.example` hanya jika belum ada.
+6. Menjalankan migration, Compose API/database, dan health verification.
+
+Deployment pertama berhenti setelah membuat `.env` agar nilai production dapat diisi manual. Deployment berikutnya tidak menimpa `.env` dan hanya memperbarui `IMAGE_TAG`.
+
+Panduan lengkap VPS, Traefik, DNS, GHCR, Actions secrets, rollback, dan bootstrap ada di [DEPLOYMENT.md](DEPLOYMENT.md).
+
+Health endpoints:
+
+```text
+GET /health  # process hidup
+GET /ready   # process dan database siap
+```
+
+## Demo credentials
+
+Seeder development membuat:
+
+```text
+Owner:  owner@tracklume.local / Password123!
+Member: member@tracklume.local / Password123!
+```
+
+Credential tersebut hanya untuk local demo. Jangan gunakan di production.
+
+## Batas MVP
+
+Fitur berikut sengaja belum termasuk dalam MVP:
+
+- Workspace multi-tenant
+- OAuth dan refresh token kompleks
+- Email invitation
+- Comment, attachment, notification, dan email
+- WebSocket atau real-time collaboration
+- Subtask, sprint, dan time tracking
+- Custom status dan custom field
+- Billing dan audit log organisasi
+- Microservice
+
+## License
+
+Tracklume API dirilis dengan lisensi MIT. Lihat [LICENSE](LICENSE).
