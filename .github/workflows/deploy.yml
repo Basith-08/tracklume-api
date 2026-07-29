@@ -77,9 +77,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push image
+        env:
+          IMAGE_OWNER: ${{ github.repository_owner }}
+          IMAGE_TAG: ${{ steps.sha.outputs.sha }}
         run: |
-          docker build --pull -t ghcr.io/${{ github.repository_owner }}/tracklume-api:${{ steps.sha.outputs.sha }} .
-          docker push ghcr.io/${{ github.repository_owner }}/tracklume-api:${{ steps.sha.outputs.sha }}
+          image_owner="$(printf '%s' "$IMAGE_OWNER" | tr '[:upper:]' '[:lower:]')"
+          image="ghcr.io/${image_owner}/tracklume-api:${IMAGE_TAG}"
+          docker build --pull -t "$image" .
+          docker push "$image"
       - name: Deploy to production
         uses: appleboy/ssh-action@v1.2.2
         with:

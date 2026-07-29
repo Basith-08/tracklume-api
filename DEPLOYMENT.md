@@ -15,7 +15,7 @@ Repository: `git@github.com:Basith-08/tracklume-api.git`
    - `PROD_DEPLOY_USER`: user SSH deployment, bukan root jika memungkinkan.
    - `PROD_DEPLOY_KEY`: private SSH key untuk user tersebut.
 
-5. Setelah image pertama dipush, ubah package `ghcr.io/Basith-08/tracklume-api` menjadi public, atau login-kan VPS ke GHCR dengan token `read:packages`.
+5. Setelah image pertama dipush, ubah package `ghcr.io/basith-08/tracklume-api` menjadi public, atau login-kan VPS ke GHCR dengan token `read:packages`.
 
 ### Domain dan VPS
 
@@ -47,7 +47,7 @@ APP_ENV=production
 APP_PORT=8080
 APP_BASE_URL=https://api-tracklume.domain-anda
 IMAGE_TAG=<commit-sha>
-GHCR_OWNER=Basith-08
+GHCR_OWNER=basith-08
 PLATFORM_DOMAIN=domain-anda
 
 POSTGRES_USER=tracklume
