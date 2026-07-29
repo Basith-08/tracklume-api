@@ -85,15 +85,51 @@ jobs:
           image="ghcr.io/${image_owner}/tracklume-api:${IMAGE_TAG}"
           docker build --pull -t "$image" .
           docker push "$image"
-      - name: Deploy to production
+      - name: Prepare deployment directory
         uses: appleboy/ssh-action@v1.2.2
+        env:
+          PROD_APP_DIR: ${{ secrets.PROD_APP_DIR }}
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_DEPLOY_USER }}
           key: ${{ secrets.PROD_DEPLOY_KEY }}
+          envs: PROD_APP_DIR
           script: |
-            cd /srv/apps/tracklume-api
-            sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=${{ steps.sha.outputs.sha }}|" .env
+            set -eu
+            mkdir -p "$PROD_APP_DIR"
+      - name: Upload deployment files
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_DEPLOY_USER }}
+          key: ${{ secrets.PROD_DEPLOY_KEY }}
+          source: "compose.yaml,.env.example"
+          target: ${{ secrets.PROD_APP_DIR }}
+          overwrite: true
+      - name: Deploy to production
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          PROD_APP_DIR: ${{ secrets.PROD_APP_DIR }}
+          IMAGE_TAG: ${{ steps.sha.outputs.sha }}
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_DEPLOY_USER }}
+          key: ${{ secrets.PROD_DEPLOY_KEY }}
+          envs: PROD_APP_DIR,IMAGE_TAG
+          script: |
+            set -eu
+            cd "$PROD_APP_DIR"
+            if [ ! -f .env ]; then
+              cp .env.example .env
+              chmod 600 .env
+              echo "Created $PROD_APP_DIR/.env from .env.example. Edit production values and rerun this workflow."
+              exit 1
+            fi
+            if grep -q '^IMAGE_TAG=' .env; then
+              sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=$IMAGE_TAG|" .env
+            else
+              printf '\nIMAGE_TAG=%s\n' "$IMAGE_TAG" >> .env
+            fi
             docker compose pull api
             docker compose up -d db
             migration_ok=0

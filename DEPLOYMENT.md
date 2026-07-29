@@ -14,6 +14,7 @@ Repository: `git@github.com:Basith-08/tracklume-api.git`
    - `PROD_HOST`: IP atau hostname VPS.
    - `PROD_DEPLOY_USER`: user SSH deployment, bukan root jika memungkinkan.
    - `PROD_DEPLOY_KEY`: private SSH key untuk user tersebut.
+   - `PROD_APP_DIR`: absolute path deployment, misalnya `/srv/apps/tracklume-api`.
 
 5. Setelah image pertama dipush, ubah package `ghcr.io/basith-08/tracklume-api` menjadi public, atau login-kan VPS ke GHCR dengan token `read:packages`.
 
@@ -33,14 +34,16 @@ Buat network jika belum ada:
 docker network create edge
 ```
 
-Siapkan directory deployment:
+Siapkan directory deployment. User pada `PROD_DEPLOY_USER` harus memiliki write access ke directory ini:
 
 ```bash
 sudo mkdir -p /srv/apps/tracklume-api
 sudo chown -R "$USER":"$USER" /srv/apps/tracklume-api
 ```
 
-Copy `compose.yaml` dan `.env` production ke directory tersebut. `.env` production minimal berisi:
+Workflow akan meng-copy `compose.yaml` dan `.env.example` ke directory tersebut. Pada deployment pertama, jika `.env` belum ada, workflow membuat `.env` dari `.env.example` lalu berhenti agar Anda dapat mengisi konfigurasi production secara manual. Jalankan ulang workflow setelah selesai mengedit `.env`. Deployment berikutnya tidak menimpa `.env`.
+
+`.env` production minimal berisi:
 
 ```env
 APP_ENV=production
