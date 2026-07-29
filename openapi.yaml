@@ -1,0 +1,178 @@
+openapi: 3.0.3
+info:
+  title: Tracklume API
+  version: 1.0.0
+  description: REST API MVP for project issues.
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: https://api-tracklume.example.com
+    description: Example production URL
+tags:
+  - name: Auth
+  - name: Users
+  - name: Projects
+  - name: Members
+  - name: Issues
+  - name: Dashboard
+paths:
+  /health:
+    get:
+      tags: [Auth]
+      security: []
+      responses: {"200": {$ref: '#/components/responses/Health'}}
+  /ready:
+    get:
+      tags: [Auth]
+      security: []
+      responses:
+        "200": {$ref: '#/components/responses/Ready'}
+        "503": {$ref: '#/components/responses/Error'}
+  /api/v1/auth/register:
+    post:
+      tags: [Auth]
+      security: []
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RegisterRequest'}}}}
+      responses: {"201": {$ref: '#/components/responses/User'}, "400": {$ref: '#/components/responses/Error'}, "409": {$ref: '#/components/responses/Error'}, "422": {$ref: '#/components/responses/Error'}}
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      security: []
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/LoginRequest'}}}}
+      responses: {"200": {$ref: '#/components/responses/Login'}, "400": {$ref: '#/components/responses/Error'}, "401": {$ref: '#/components/responses/Error'}, "422": {$ref: '#/components/responses/Error'}}
+  /api/v1/me:
+    get: {tags: [Users], responses: {"200": {$ref: '#/components/responses/User'}, "401": {$ref: '#/components/responses/Error'}}}
+    patch:
+      tags: [Users]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ProfileUpdate'}}}}
+      responses: {"200": {$ref: '#/components/responses/User'}, "401": {$ref: '#/components/responses/Error'}, "422": {$ref: '#/components/responses/Error'}}
+  /api/v1/me/password:
+    put:
+      tags: [Users]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PasswordUpdate'}}}}
+      responses: {"200": {$ref: '#/components/responses/Message'}, "401": {$ref: '#/components/responses/Error'}, "422": {$ref: '#/components/responses/Error'}}
+  /api/v1/projects:
+    get:
+      tags: [Projects]
+      parameters: [{name: include_archived, in: query, schema: {type: boolean, default: false}}]
+      responses: {"200": {$ref: '#/components/responses/ProjectCollection'}, "401": {$ref: '#/components/responses/Error'}}
+    post:
+      tags: [Projects]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ProjectCreate'}}}}
+      responses: {"201": {$ref: '#/components/responses/Project'}, "401": {$ref: '#/components/responses/Error'}, "409": {$ref: '#/components/responses/Error'}, "422": {$ref: '#/components/responses/Error'}}
+  /api/v1/projects/{projectID}:
+    parameters: [{$ref: '#/components/parameters/ProjectID'}]
+    get: {tags: [Projects], responses: {"200": {$ref: '#/components/responses/Project'}, "403": {$ref: '#/components/responses/Error'}, "404": {$ref: '#/components/responses/Error'}}}
+    patch:
+      tags: [Projects]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ProjectUpdate'}}}}
+      responses: {"200": {$ref: '#/components/responses/Project'}, "403": {$ref: '#/components/responses/Error'}, "422": {$ref: '#/components/responses/Error'}}
+    delete: {tags: [Projects], description: Archives the project, responses: {"204": {description: Archived}, "403": {$ref: '#/components/responses/Error'}}}
+  /api/v1/projects/{projectID}/members:
+    parameters: [{$ref: '#/components/parameters/ProjectID'}]
+    get: {tags: [Members], responses: {"200": {$ref: '#/components/responses/MemberCollection'}, "404": {$ref: '#/components/responses/Error'}}}
+    post:
+      tags: [Members]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/MemberCreate'}}}}
+      responses: {"201": {$ref: '#/components/responses/Member'}, "403": {$ref: '#/components/responses/Error'}, "409": {$ref: '#/components/responses/Error'}}
+  /api/v1/projects/{projectID}/members/{userID}:
+    parameters: [{$ref: '#/components/parameters/ProjectID'}, {$ref: '#/components/parameters/UserID'}]
+    patch:
+      tags: [Members]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/MemberUpdate'}}}}
+      responses: {"200": {$ref: '#/components/responses/Member'}, "403": {$ref: '#/components/responses/Error'}}
+    delete: {tags: [Members], responses: {"204": {description: Removed}, "403": {$ref: '#/components/responses/Error'}}}
+  /api/v1/projects/{projectID}/issues:
+    parameters: [{$ref: '#/components/parameters/ProjectID'}]
+    get:
+      tags: [Issues]
+      parameters:
+        - {name: search, in: query, schema: {type: string}}
+        - {name: status, in: query, description: Comma-separated statuses, schema: {type: string}}
+        - {name: priority, in: query, schema: {$ref: '#/components/schemas/Priority'}}
+        - {name: type, in: query, schema: {$ref: '#/components/schemas/IssueType'}}
+        - {name: assignee_id, in: query, schema: {type: string, format: uuid}}
+        - {name: reporter_id, in: query, schema: {type: string, format: uuid}}
+        - {name: due_before, in: query, schema: {type: string, format: date}}
+        - {name: due_after, in: query, schema: {type: string, format: date}}
+        - {name: sort, in: query, schema: {type: string, enum: [created_at, updated_at, priority, due_date]}}
+        - {name: page, in: query, schema: {type: integer, minimum: 1, default: 1}}
+        - {name: per_page, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+      responses: {"200": {$ref: '#/components/responses/IssueCollection'}, "403": {$ref: '#/components/responses/Error'}}
+    post:
+      tags: [Issues]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/IssueCreate'}}}}
+      responses: {"201": {$ref: '#/components/responses/Issue'}, "403": {$ref: '#/components/responses/Error'}, "409": {$ref: '#/components/responses/Error'}, "422": {$ref: '#/components/responses/Error'}}
+  /api/v1/projects/{projectID}/issues/{issueID}:
+    parameters: [{$ref: '#/components/parameters/ProjectID'}, {$ref: '#/components/parameters/IssueID'}]
+    get: {tags: [Issues], responses: {"200": {$ref: '#/components/responses/Issue'}, "404": {$ref: '#/components/responses/Error'}}}
+    patch:
+      tags: [Issues]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/IssueUpdate'}}}}
+      responses: {"200": {$ref: '#/components/responses/Issue'}, "403": {$ref: '#/components/responses/Error'}, "409": {$ref: '#/components/responses/Error'}}
+    delete: {tags: [Issues], responses: {"204": {description: Deleted}, "403": {$ref: '#/components/responses/Error'}}}
+  /api/v1/projects/{projectID}/issues/{issueID}/status:
+    parameters: [{$ref: '#/components/parameters/ProjectID'}, {$ref: '#/components/parameters/IssueID'}]
+    patch:
+      tags: [Issues]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [status], properties: {status: {$ref: '#/components/schemas/Status'}}}}}}
+      responses: {"200": {$ref: '#/components/responses/Issue'}, "403": {$ref: '#/components/responses/Error'}}
+  /api/v1/projects/{projectID}/issues/{issueID}/position:
+    parameters: [{$ref: '#/components/parameters/ProjectID'}, {$ref: '#/components/parameters/IssueID'}]
+    patch:
+      tags: [Issues]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [status, position], properties: {status: {$ref: '#/components/schemas/Status'}, position: {type: integer, minimum: 0}}}}}}
+      responses: {"200": {$ref: '#/components/responses/Issue'}, "403": {$ref: '#/components/responses/Error'}}
+  /api/v1/projects/{projectID}/issues/{issueID}/activities:
+    parameters: [{$ref: '#/components/parameters/ProjectID'}, {$ref: '#/components/parameters/IssueID'}]
+    get: {tags: [Issues], responses: {"200": {$ref: '#/components/responses/ActivityCollection'}, "404": {$ref: '#/components/responses/Error'}}}
+  /api/v1/projects/{projectID}/dashboard:
+    parameters: [{$ref: '#/components/parameters/ProjectID'}]
+    get: {tags: [Dashboard], responses: {"200": {$ref: '#/components/responses/Dashboard'}, "404": {$ref: '#/components/responses/Error'}}}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+  parameters:
+    ProjectID: {name: projectID, in: path, required: true, schema: {type: string, format: uuid}}
+    IssueID: {name: issueID, in: path, required: true, schema: {type: string, format: uuid}}
+    UserID: {name: userID, in: path, required: true, schema: {type: string, format: uuid}}
+  schemas:
+    RegisterRequest: {type: object, required: [name, email, password], properties: {name: {type: string, maxLength: 120}, email: {type: string, format: email}, password: {type: string, minLength: 8, maxLength: 128, format: password}}}
+    LoginRequest: {type: object, required: [email, password], properties: {email: {type: string, format: email}, password: {type: string, format: password}}}
+    ProfileUpdate: {type: object, properties: {name: {type: string}, avatar_url: {type: string, nullable: true}}}
+    PasswordUpdate: {type: object, required: [current_password, new_password], properties: {current_password: {type: string, format: password}, new_password: {type: string, minLength: 8, format: password}}}
+    User: {type: object, properties: {id: {type: string, format: uuid}, name: {type: string}, email: {type: string, format: email}, avatar_url: {type: string, nullable: true}, created_at: {type: string, format: date-time}, updated_at: {type: string, format: date-time}}}
+    Login: {type: object, properties: {access_token: {type: string}, token_type: {type: string, example: Bearer}, expires_in: {type: integer}, user: {$ref: '#/components/schemas/User'}}}
+    ProjectCreate: {type: object, required: [name, key], properties: {name: {type: string}, key: {type: string, example: WEB}, description: {type: string}}}
+    ProjectUpdate: {type: object, properties: {name: {type: string}, description: {type: string}}}
+    Project: {type: object, properties: {id: {type: string, format: uuid}, name: {type: string}, key: {type: string}, description: {type: string}, owner_id: {type: string, format: uuid}, is_archived: {type: boolean}, created_at: {type: string, format: date-time}, updated_at: {type: string, format: date-time}}}
+    MemberCreate: {type: object, required: [email, role], properties: {email: {type: string, format: email}, role: {type: string, enum: [admin, member, viewer]}}}
+    MemberUpdate: {type: object, required: [role], properties: {role: {type: string, enum: [admin, member, viewer]}}}
+    Member: {type: object, properties: {user_id: {type: string, format: uuid}, name: {type: string}, email: {type: string, format: email}, avatar_url: {type: string, nullable: true}, role: {type: string}, created_at: {type: string, format: date-time}}}
+    IssueType: {type: string, enum: [task, bug, feature]}
+    Status: {type: string, enum: [backlog, todo, in_progress, done, cancelled]}
+    Priority: {type: string, enum: [low, medium, high, urgent]}
+    IssueCreate: {type: object, required: [title, type, status, priority], properties: {title: {type: string}, description: {type: string}, type: {$ref: '#/components/schemas/IssueType'}, status: {$ref: '#/components/schemas/Status'}, priority: {$ref: '#/components/schemas/Priority'}, assignee_id: {type: string, format: uuid, nullable: true}, due_date: {type: string, format: date, nullable: true}}}
+    IssueUpdate: {type: object, properties: {title: {type: string}, description: {type: string}, type: {$ref: '#/components/schemas/IssueType'}, status: {$ref: '#/components/schemas/Status'}, priority: {$ref: '#/components/schemas/Priority'}, assignee_id: {type: string, format: uuid, nullable: true}, due_date: {type: string, format: date, nullable: true}}}
+    Issue: {type: object, properties: {id: {type: string, format: uuid}, project_id: {type: string, format: uuid}, sequence_number: {type: integer}, identifier: {type: string}, title: {type: string}, description: {type: string}, type: {$ref: '#/components/schemas/IssueType'}, status: {$ref: '#/components/schemas/Status'}, priority: {$ref: '#/components/schemas/Priority'}, assignee_id: {type: string, format: uuid, nullable: true}, reporter_id: {type: string, format: uuid}, due_date: {type: string, format: date, nullable: true}, position: {type: integer}, created_at: {type: string, format: date-time}, updated_at: {type: string, format: date-time}}}
+    Activity: {type: object, properties: {id: {type: string, format: uuid}, issue_id: {type: string, format: uuid}, actor_id: {type: string, format: uuid}, action: {type: string}, field_name: {type: string, nullable: true}, old_value: {type: string, nullable: true}, new_value: {type: string, nullable: true}, created_at: {type: string, format: date-time}}}
+    Dashboard: {type: object, properties: {total_active: {type: integer}, by_status: {type: object, additionalProperties: {type: integer}}, by_priority: {type: object, additionalProperties: {type: integer}}, by_type: {type: object, additionalProperties: {type: integer}}, overdue: {type: integer}, due_next_7_days: {type: integer}, recently_updated: {type: array, items: {$ref: '#/components/schemas/Issue'}}, progress_percentage: {type: number, format: double}}}
+    Meta: {type: object, properties: {page: {type: integer}, per_page: {type: integer}, total: {type: integer}, total_pages: {type: integer}}}
+    Error: {type: object, properties: {code: {type: string}, message: {type: string}, fields: {type: object, nullable: true}, request_id: {type: string, format: uuid}}}
+  responses:
+    Error: {description: Error, content: {application/json: {schema: {type: object, properties: {error: {$ref: '#/components/schemas/Error'}}}}}}
+    Health: {description: Healthy, content: {application/json: {schema: {type: object}}}}
+    Ready: {description: Ready, content: {application/json: {schema: {type: object}}}}
+    User: {description: User, content: {application/json: {schema: {type: object, properties: {data: {$ref: '#/components/schemas/User'}}}}}}
+    Login: {description: Token, content: {application/json: {schema: {type: object, properties: {data: {$ref: '#/components/schemas/Login'}}}}}}
+    Project: {description: Project, content: {application/json: {schema: {type: object, properties: {data: {$ref: '#/components/schemas/Project'}}}}}}
+    Member: {description: Member, content: {application/json: {schema: {type: object, properties: {data: {$ref: '#/components/schemas/Member'}}}}}}
+    ProjectCollection: {description: Projects, content: {application/json: {schema: {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/Project'}}, meta: {$ref: '#/components/schemas/Meta'}}}}}}
+    MemberCollection: {description: Members, content: {application/json: {schema: {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/Member'}}}}}}}
+    Issue: {description: Issue, content: {application/json: {schema: {type: object, properties: {data: {$ref: '#/components/schemas/Issue'}}}}}}
+    IssueCollection: {description: Issues, content: {application/json: {schema: {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/Issue'}}, meta: {$ref: '#/components/schemas/Meta'}}}}}}
+    ActivityCollection: {description: Activities, content: {application/json: {schema: {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/Activity'}}}}}}}
+    Dashboard: {description: Dashboard, content: {application/json: {schema: {type: object, properties: {data: {$ref: '#/components/schemas/Dashboard'}}}}}}
+    Message: {description: Message, content: {application/json: {schema: {type: object}}}}
+security:
+  - bearerAuth: []

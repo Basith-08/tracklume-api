@@ -1,0 +1,48 @@
+name: Tracklume CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.25.0"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: tracklume
+          POSTGRES_PASSWORD: tracklume
+          POSTGRES_DB: tracklume
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U tracklume -d tracklume"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - run: go mod tidy
+      - run: git diff --exit-code -- go.mod go.sum
+      - run: go vet ./...
+      - name: Apply migrations
+        env:
+          DATABASE_URL: postgres://tracklume:tracklume@localhost:5432/tracklume?sslmode=disable
+        run: go run ./cmd/migrate up
+      - name: Test
+        env:
+          TEST_DATABASE_URL: postgres://tracklume:tracklume@localhost:5432/tracklume?sslmode=disable
+        run: go test ./...
+      - run: CGO_ENABLED=0 go build ./cmd/api ./cmd/migrate ./cmd/seed

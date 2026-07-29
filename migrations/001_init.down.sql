@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS issue_activities;
+DROP TABLE IF EXISTS issues;
+DROP TABLE IF EXISTS project_issue_counters;
+DROP TABLE IF EXISTS project_members;
+DROP TABLE IF EXISTS projects;
+DROP TABLE IF EXISTS users;
+DROP FUNCTION IF EXISTS ensure_project_owner_membership();
+DROP FUNCTION IF EXISTS protect_project_owner_membership();
+DROP FUNCTION IF EXISTS set_updated_at();

@@ -1,0 +1,106 @@
+name: Deploy Tracklume API
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit SHA to redeploy (rollback)"
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy-tracklume-api
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: "1.25.0"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: tracklume
+          POSTGRES_PASSWORD: tracklume
+          POSTGRES_DB: tracklume
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U tracklume -d tracklume"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Verify modules
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+      - run: go vet ./...
+      - name: Prepare integration database
+        env:
+          DATABASE_URL: postgres://tracklume:tracklume@localhost:5432/tracklume?sslmode=disable
+        run: go run ./cmd/migrate up
+      - name: Run tests
+        env:
+          TEST_DATABASE_URL: postgres://tracklume:tracklume@localhost:5432/tracklume?sslmode=disable
+        run: go test ./...
+      - name: Build binaries
+        run: CGO_ENABLED=0 go build ./cmd/api
+
+  build-and-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+      - name: Resolve deploy SHA
+        id: sha
+        run: echo "sha=${{ inputs.sha || github.sha }}" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push image
+        run: |
+          docker build --pull -t ghcr.io/${{ github.repository_owner }}/tracklume-api:${{ steps.sha.outputs.sha }} .
+          docker push ghcr.io/${{ github.repository_owner }}/tracklume-api:${{ steps.sha.outputs.sha }}
+      - name: Deploy to production
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_DEPLOY_USER }}
+          key: ${{ secrets.PROD_DEPLOY_KEY }}
+          script: |
+            cd /srv/apps/tracklume-api
+            sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=${{ steps.sha.outputs.sha }}|" .env
+            docker compose pull api
+            docker compose up -d db
+            migration_ok=0
+            for attempt in $(seq 1 30); do
+              if docker compose run --rm --no-deps --entrypoint /app/tracklume-migrate api up; then migration_ok=1; break; fi
+              sleep 2
+            done
+            if [ "$migration_ok" -ne 1 ]; then docker compose logs --tail=100 db; exit 1; fi
+            docker compose up -d api
+            for attempt in $(seq 1 30); do
+              if docker compose exec -T api wget -qO- http://127.0.0.1:8080/ready >/dev/null; then exit 0; fi
+              sleep 2
+            done
+            docker compose logs --tail=100 api
+            exit 1

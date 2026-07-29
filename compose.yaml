@@ -1,0 +1,73 @@
+services:
+  api:
+    image: ghcr.io/${GHCR_OWNER}/tracklume-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # The API runs inside Compose; migrations/seeder run from the host.
+      DB_HOST: db
+      DATABASE_URL: ""
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - edge
+      - tracklume-api-internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.tracklume-api.rule=Host(`api-tracklume.${PLATFORM_DOMAIN}`)"
+      - "traefik.http.routers.tracklume-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.tracklume-api.middlewares=secure-headers@file"
+      - "traefik.http.services.tracklume-api.loadbalancer.server.port=8080"
+
+  db:
+    image: postgres:16.4
+    restart: unless-stopped
+    env_file: .env
+    # Local host access for `make migrate-up` / `make seed`; loopback only.
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - tracklume-api-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - tracklume-api-internal
+
+volumes:
+  tracklume-api-db-data:
+    driver: local
+    name: tracklume-api-db-data
+
+networks:
+  edge:
+    external: true
+  tracklume-api-internal:
+    driver: bridge
