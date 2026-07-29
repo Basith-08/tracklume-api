@@ -81,7 +81,7 @@ jobs:
           docker build --pull -t ghcr.io/${{ github.repository_owner }}/tracklume-api:${{ steps.sha.outputs.sha }} .
           docker push ghcr.io/${{ github.repository_owner }}/tracklume-api:${{ steps.sha.outputs.sha }}
       - name: Deploy to production
-        uses: appleboy/ssh-action@v1.2.2
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_DEPLOY_USER }}
