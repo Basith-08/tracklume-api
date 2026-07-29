@@ -10,7 +10,7 @@ Kelola tugas, bug, dan ide produk dengan lebih terarah.
 
 Repository: `github.com/Basith-08/tracklume-api`
 
-## Apa yang disediakan
+## Fitur utama
 
 - Authentication berbasis JWT: register, login, profil pengguna, dan perubahan password.
 - Project management: project, anggota, role owner/admin/member/viewer, archive, dan authorization berbasis membership.
@@ -36,7 +36,7 @@ Tracklume tidak menyediakan UI frontend. Frontend terpisah cukup menggunakan bas
 - `internal/auth`, `internal/project`, `internal/issue`, dan `internal/dashboard` memisahkan domain; `internal/middleware` menangani request ID, logging, CORS, auth, timeout, recovery, dan rate limit.
 - Migration SQL berada di `migrations/`; executable ada di `cmd/api`, `cmd/migrate`, dan `cmd/seed`.
 
-## Requirement dan local run
+## Quick start local
 
 Go 1.25+, Docker Compose, dan PostgreSQL 16+ diperlukan. `.env` tidak di-commit dan tidak dibaca otomatis oleh Go; salin template lalu export isinya ke shell:
 
@@ -57,8 +57,17 @@ Jika memakai Makefile, `make run`, `make migrate-up`, `make migrate-down`, dan `
 
 Dengan Compose, isi `.env` dan jalankan `docker compose up -d db`. PostgreSQL menggunakan named volume Docker `tracklume-api-db-data` dan publish loopback `127.0.0.1:5432`, sehingga command Go dari host dapat memakai `DB_HOST=localhost`; port database tidak dipublish ke interface eksternal. Volume lama dari template sebelumnya tidak disentuh. Jalankan migration melalui `docker compose run --rm --no-deps --entrypoint /app/tracklume-migrate api up` setelah image tersedia. Untuk development dari source, command Makefile berikut tersedia:
 
-```text
-make run | build | test | lint | migrate-up | migrate-down | seed | docker-build
+Perintah Makefile yang tersedia:
+
+```bash
+make run
+make build
+make test
+make lint
+make migrate-up
+make migrate-down
+make seed
+make docker-build
 ```
 
 Seeder bersifat idempotent dan hanya untuk local demo. Credential demo: `owner@tracklume.local` / `Password123!` dan `member@tracklume.local` / `Password123!`.
@@ -69,22 +78,73 @@ Seeder bersifat idempotent dan hanya untuk local demo. Credential demo: `owner@t
 
 Jangan commit `.env`. Production wajib memakai JWT secret acak; aplikasi menolak secret pendek ketika `APP_ENV=production`.
 
-## API
+## API dan dokumentasi
 
-Base prefix: `/api/v1`. Public: `GET /health`, `GET /ready`, `POST /api/v1/auth/register`, `POST /api/v1/auth/login`. Endpoint lain memakai `Authorization: Bearer <access_token>`:
+Base prefix API adalah `/api/v1`. Endpoint health dan authentication berikut dapat diakses tanpa token:
 
-- User: `GET/PATCH /api/v1/me`, `PUT /api/v1/me/password`.
-- Project: `GET/POST /api/v1/projects`, `GET/PATCH/DELETE /api/v1/projects/{projectID}`.
-- Member: `GET/POST /api/v1/projects/{projectID}/members`, `PATCH/DELETE .../members/{userID}`.
-- Issue: `GET/POST /api/v1/projects/{projectID}/issues`, `GET/PATCH/DELETE .../issues/{issueID}`.
-- Workflow: `PATCH .../issues/{issueID}/status`, `PATCH .../issues/{issueID}/position`, `GET .../issues/{issueID}/activities`.
-- Dashboard: `GET /api/v1/projects/{projectID}/dashboard`.
+```text
+GET  /health
+GET  /ready
+POST /api/v1/auth/register
+POST /api/v1/auth/login
+```
 
-Response tunggal berbentuk `{ "data": ... }`, collection memakai `{ "data": [...], "meta": {...} }`, dan error memakai `{ "error": { "code", "message", "fields", "request_id" } }`. Filter issue mendukung `search`, `status`, `priority`, `type`, `assignee_id`, `reporter_id`, `due_before`, `due_after`, `sort`, `page`, dan `per_page` (maksimum 100). Detail kontrak ada di [openapi.yaml](openapi.yaml).
+Endpoint yang membutuhkan authentication menggunakan header:
 
-Panduan public repository, GitHub Actions secrets, DNS, Traefik, dan VPS ada di [DEPLOYMENT.md](DEPLOYMENT.md).
+```http
+Authorization: Bearer <access_token>
+```
 
-Swagger UI tersedia di `GET /docs`, misalnya `http://localhost:8080/docs`. Spesifikasi mentah tersedia di `GET /openapi.yaml`. Halaman Swagger UI memakai asset CDN `unpkg.com`, jadi browser memerlukan akses internet untuk memuat tampilannya.
+Endpoint utama:
+
+```text
+GET|PATCH /api/v1/me
+PUT       /api/v1/me/password
+
+GET|POST  /api/v1/projects
+GET|PATCH|DELETE /api/v1/projects/{projectID}
+
+GET|POST  /api/v1/projects/{projectID}/members
+PATCH|DELETE /api/v1/projects/{projectID}/members/{userID}
+
+GET|POST  /api/v1/projects/{projectID}/issues
+GET|PATCH|DELETE /api/v1/projects/{projectID}/issues/{issueID}
+PATCH     /api/v1/projects/{projectID}/issues/{issueID}/status
+PATCH     /api/v1/projects/{projectID}/issues/{issueID}/position
+GET       /api/v1/projects/{projectID}/issues/{issueID}/activities
+
+GET       /api/v1/projects/{projectID}/dashboard
+```
+
+Filter issue mendukung `search`, `status`, `priority`, `type`, `assignee_id`, `reporter_id`, `due_before`, `due_after`, `sort`, `page`, dan `per_page` dengan maksimum `100` item per halaman.
+
+Swagger UI tersedia di `GET /docs`, misalnya [http://localhost:8080/docs](http://localhost:8080/docs). Spesifikasi OpenAPI tersedia di [openapi.yaml](openapi.yaml) dan endpoint `GET /openapi.yaml`. Swagger UI menggunakan asset CDN `unpkg.com`.
+
+Response tunggal:
+
+```json
+{
+  "data": {}
+}
+```
+
+Response collection menambahkan metadata pagination:
+
+```json
+{
+  "data": [],
+  "meta": {
+    "page": 1,
+    "per_page": 20,
+    "total": 0,
+    "total_pages": 0
+  }
+}
+```
+
+Error memakai format konsisten dengan `code`, `message`, optional `fields`, dan `request_id`.
+
+Panduan GitHub Actions, DNS, Traefik, dan VPS ada di [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Authorization dan keputusan desain
 
