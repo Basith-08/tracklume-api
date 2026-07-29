@@ -44,8 +44,17 @@ func TestPostgresConstraintsAndIssueSequence(t *testing.T) {
 	if err = tx.QueryRow(ctx, `SELECT role FROM project_members WHERE project_id=$1 AND user_id=$2`, projectID, owner).Scan(&role); err != nil || role != "owner" {
 		t.Fatalf("owner membership missing: %v/%s", err, role)
 	}
+	if _, err = tx.Exec(ctx, `SAVEPOINT duplicate_email`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err = tx.Exec(ctx, `INSERT INTO users(id,name,email,password_hash) VALUES($1,'Duplicate',$2,'hash')`, uuid.New(), owner.String()+"@test.local"); err == nil {
 		t.Fatal("duplicate email accepted")
+	}
+	if _, err = tx.Exec(ctx, `ROLLBACK TO SAVEPOINT duplicate_email`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(ctx, `RELEASE SAVEPOINT duplicate_email`); err != nil {
+		t.Fatal(err)
 	}
 	var first, second int64
 	if err = tx.QueryRow(ctx, `UPDATE project_issue_counters SET next_sequence=next_sequence+1 WHERE project_id=$1 RETURNING next_sequence-1`, projectID).Scan(&first); err != nil {
