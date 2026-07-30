@@ -86,6 +86,19 @@ docker compose up -d api
 docker compose ps
 ```
 
+Setelah migration berhasil, buat akun platform superadmin secara manual:
+
+```bash
+read -rsp "Superadmin password: " ADMIN_BOOTSTRAP_PASSWORD; echo
+docker compose run --rm --no-deps \
+  -e ADMIN_BOOTSTRAP_PASSWORD="$ADMIN_BOOTSTRAP_PASSWORD" \
+  --entrypoint /app/tracklume-admin api create \
+  --email admin@example.com --name "Tracklume Admin"
+unset ADMIN_BOOTSTRAP_PASSWORD
+```
+
+API tidak membuat superadmin otomatis. Endpoint `/api/v1/admin/*` hanya dapat dipakai oleh akun ini; akun regular tetap dibuat melalui endpoint register.
+
 Verifikasi:
 
 ```bash

@@ -48,7 +48,15 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (LoginResponse, e
 	if err != nil || !security.VerifyPassword(user.PasswordHash, req.Password) {
 		return LoginResponse{}, app.ErrUnauthorized
 	}
-	token, expires, err := s.tokens.Create(user.ID, time.Now().UTC())
+	if !user.IsActive {
+		return LoginResponse{}, app.ErrInactive
+	}
+	now := time.Now().UTC()
+	if err = s.repo.MarkLogin(ctx, user.ID, now); err != nil {
+		return LoginResponse{}, err
+	}
+	user.LastLoginAt = &now
+	token, expires, err := s.tokens.Create(user.ID, now)
 	if err != nil {
 		return LoginResponse{}, err
 	}

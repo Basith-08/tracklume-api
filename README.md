@@ -31,6 +31,7 @@ Repository: [`Basith-08/tracklume-api`](https://github.com/Basith-08/tracklume-a
 - **Issue tracking** — task, bug, feature, status Kanban, priority, assignee, reporter, due date, pencarian, filter, sorting, dan pagination.
 - **Issue activity** — riwayat perubahan title, status, priority, assignee, due date, pembuatan, dan penghapusan issue.
 - **Dashboard** — total issue aktif, distribusi status/priority/type, overdue, due dalam tujuh hari, issue terbaru, dan progress percentage.
+- **Platform administration** — superadmin dapat melihat statistik pengguna, last login, aktivitas akun, menonaktifkan/mengaktifkan akun, serta memulihkan akun yang dihapus secara soft delete.
 - **Operational readiness** — healthcheck, readiness database, structured logging, request ID, CORS, timeout, panic recovery, body limit, dan rate limit auth.
 
 Tracklume tidak menyediakan UI frontend. Frontend terpisah menggunakan base URL API, mengirim `Authorization: Bearer <access_token>`, dan membaca response envelope yang dijelaskan di bawah.
@@ -127,10 +128,17 @@ make lint
 make migrate-up
 make migrate-down
 make seed
+make admin-create
 make docker-build
 ```
 
 `make run`, `make migrate-up`, `make migrate-down`, dan `make seed` membaca `.env` secara otomatis.
+`make admin-create` membutuhkan `ADMIN_BOOTSTRAP_PASSWORD`; email dan nama dapat diubah dengan `ADMIN_EMAIL` dan `ADMIN_NAME`.
+
+```bash
+ADMIN_BOOTSTRAP_PASSWORD='change-this-password' \
+  make admin-create ADMIN_EMAIL=admin@example.com ADMIN_NAME="Tracklume Admin"
+```
 
 ## API dan dokumentasi
 
@@ -170,7 +178,16 @@ PATCH     /api/v1/projects/{projectID}/issues/{issueID}/position
 GET       /api/v1/projects/{projectID}/issues/{issueID}/activities
 
 GET       /api/v1/projects/{projectID}/dashboard
+
+GET       /api/v1/admin/overview
+GET       /api/v1/admin/users?status=active&page=1&per_page=20
+GET       /api/v1/admin/users/{userID}
+PATCH     /api/v1/admin/users/{userID}/status
+DELETE    /api/v1/admin/users/{userID}                 # soft delete
+POST      /api/v1/admin/users/{userID}/restore
 ```
+
+Endpoint `/admin/*` hanya dapat digunakan oleh akun dengan `platform_role=superadmin`. Status akun dapat berupa `active`, `inactive`, atau `deleted`. Menonaktifkan akun memerlukan alasan; akun yang dinonaktifkan tidak dapat login atau memakai access token yang masih aktif. Penghapusan akun bersifat soft delete agar dapat dipulihkan.
 
 Filter issue mendukung:
 
@@ -277,6 +294,28 @@ Aturan tambahan:
 - `DELETE /projects/{id}` melakukan archive/soft delete.
 - `DELETE /issues/{id}` melakukan soft delete agar activity history tetap tersedia.
 
+### Platform admin
+
+Akun superadmin tidak dibuat otomatis dari runtime API. Setelah migration, buat secara eksplisit:
+
+```bash
+ADMIN_BOOTSTRAP_PASSWORD='change-this-password' \
+  go run ./cmd/admin create --email admin@example.com --name "Tracklume Admin"
+```
+
+Pada VPS:
+
+```bash
+read -rsp "Superadmin password: " ADMIN_BOOTSTRAP_PASSWORD; echo
+docker compose run --rm --no-deps \
+  -e ADMIN_BOOTSTRAP_PASSWORD="$ADMIN_BOOTSTRAP_PASSWORD" \
+  --entrypoint /app/tracklume-admin api create \
+  --email admin@example.com --name "Tracklume Admin"
+unset ADMIN_BOOTSTRAP_PASSWORD
+```
+
+Command tersebut idempotent berdasarkan email: akun yang sudah ada akan dipromosikan menjadi superadmin dan akun soft-deleted akan dipulihkan. Jangan menaruh password bootstrap di `.env` atau repository.
+
 ## Database dan migration
 
 Migration dijalankan secara eksplisit:
@@ -296,6 +335,8 @@ project_issue_counters
 issues
 issue_activities
 ```
+
+Migration `003` menambahkan `users.deleted_at` untuk soft delete akun tanpa merusak database yang sudah menjalankan migration `002`.
 
 Nomor issue dibuat per project secara atomic sehingga identifier berbentuk `PROJECTKEY-1`, `PROJECTKEY-2`, dan seterusnya tanpa race condition.
 

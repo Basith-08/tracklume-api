@@ -1,6 +1,8 @@
-.PHONY: run build test lint migrate-up migrate-down seed docker-build
+.PHONY: run build test lint migrate-up migrate-down seed admin-create docker-build
 
 ENV_FILE ?= .env
+ADMIN_EMAIL ?= admin@example.com
+ADMIN_NAME ?= Tracklume Admin
 
 run:
 	set -a; . ./$(ENV_FILE); set +a; go run ./cmd/api
@@ -22,6 +24,9 @@ migrate-down:
 
 seed:
 	set -a; . ./$(ENV_FILE); set +a; go run ./cmd/seed
+
+admin-create:
+	set -a; . ./$(ENV_FILE); set +a; go run ./cmd/admin create --email "$(ADMIN_EMAIL)" --name "$(ADMIN_NAME)"
 
 docker-build:
 	docker build -t tracklume-api:local .

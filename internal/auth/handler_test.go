@@ -24,7 +24,7 @@ func TestAuthMiddlewareRejectsMissingToken(t *testing.T) {
 	manager := security.NewTokenManager("test-secret", 0)
 	req := httptest.NewRequest("GET", "/api/v1/me", nil)
 	res := httptest.NewRecorder()
-	middleware.Authenticate(manager, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { t.Fatal("authenticated handler called") })).ServeHTTP(res, req)
+	middleware.Authenticate(manager, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { t.Fatal("authenticated handler called") })).ServeHTTP(res, req)
 	if res.Code != http.StatusUnauthorized {
 		t.Fatalf("got status %d", res.Code)
 	}

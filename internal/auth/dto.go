@@ -1,5 +1,7 @@
 package auth
 
+import "time"
+
 type RegisterRequest struct {
 	Name     string `json:"name" validate:"required,min=1,max=120"`
 	Email    string `json:"email" validate:"required,email"`
@@ -19,12 +21,15 @@ type ChangePasswordRequest struct {
 }
 
 type UserResponse struct {
-	ID        string  `json:"id"`
-	Name      string  `json:"name"`
-	Email     string  `json:"email"`
-	AvatarURL *string `json:"avatar_url"`
-	CreatedAt string  `json:"created_at,omitempty"`
-	UpdatedAt string  `json:"updated_at,omitempty"`
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	Email        string  `json:"email"`
+	AvatarURL    *string `json:"avatar_url"`
+	PlatformRole string  `json:"platform_role"`
+	IsActive     bool    `json:"is_active"`
+	LastLoginAt  *string `json:"last_login_at,omitempty"`
+	CreatedAt    string  `json:"created_at,omitempty"`
+	UpdatedAt    string  `json:"updated_at,omitempty"`
 }
 type LoginResponse struct {
 	AccessToken string       `json:"access_token"`
@@ -34,5 +39,10 @@ type LoginResponse struct {
 }
 
 func presentUser(user User) UserResponse {
-	return UserResponse{ID: user.ID.String(), Name: user.Name, Email: user.Email, AvatarURL: user.AvatarURL, CreatedAt: user.CreatedAt.UTC().Format("2006-01-02T15:04:05.000Z07:00"), UpdatedAt: user.UpdatedAt.UTC().Format("2006-01-02T15:04:05.000Z07:00")}
+	var lastLoginAt *string
+	if user.LastLoginAt != nil {
+		value := user.LastLoginAt.UTC().Format(time.RFC3339Nano)
+		lastLoginAt = &value
+	}
+	return UserResponse{ID: user.ID.String(), Name: user.Name, Email: user.Email, AvatarURL: user.AvatarURL, PlatformRole: user.PlatformRole, IsActive: user.IsActive, LastLoginAt: lastLoginAt, CreatedAt: user.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: user.UpdatedAt.UTC().Format(time.RFC3339Nano)}
 }

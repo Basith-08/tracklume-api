@@ -15,6 +15,7 @@ tags:
   - name: Members
   - name: Issues
   - name: Dashboard
+  - name: Admin
 paths:
   /health:
     get:
@@ -39,7 +40,7 @@ paths:
       tags: [Auth]
       security: []
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/LoginRequest'}}}}
-      responses: {"200": {$ref: '#/components/responses/Login'}, "400": {$ref: '#/components/responses/Error'}, "401": {$ref: '#/components/responses/Error'}, "422": {$ref: '#/components/responses/Error'}}
+      responses: {"200": {$ref: '#/components/responses/Login'}, "400": {$ref: '#/components/responses/Error'}, "401": {$ref: '#/components/responses/Error'}, "403": {$ref: '#/components/responses/Error'}, "422": {$ref: '#/components/responses/Error'}}
   /api/v1/me:
     get: {tags: [Users], responses: {"200": {$ref: '#/components/responses/User'}, "401": {$ref: '#/components/responses/Error'}}}
     patch:
@@ -51,6 +52,44 @@ paths:
       tags: [Users]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PasswordUpdate'}}}}
       responses: {"200": {$ref: '#/components/responses/Message'}, "401": {$ref: '#/components/responses/Error'}, "422": {$ref: '#/components/responses/Error'}}
+  /api/v1/admin/overview:
+    get:
+      tags: [Admin]
+      description: Platform administrator overview. Requires platform_role=superadmin.
+      responses: {"200": {$ref: '#/components/responses/AdminOverview'}, "401": {$ref: '#/components/responses/Error'}, "403": {$ref: '#/components/responses/Error'}}
+  /api/v1/admin/users:
+    get:
+      tags: [Admin]
+      description: List users for platform support. Requires platform_role=superadmin.
+      parameters:
+        - {name: search, in: query, schema: {type: string}}
+        - {name: status, in: query, schema: {type: string, enum: [all, active, inactive, deleted], default: all}}
+        - {name: page, in: query, schema: {type: integer, minimum: 1, default: 1}}
+        - {name: per_page, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+      responses: {"200": {$ref: '#/components/responses/AdminUserCollection'}, "401": {$ref: '#/components/responses/Error'}, "403": {$ref: '#/components/responses/Error'}}
+  /api/v1/admin/users/{userID}:
+    parameters: [{$ref: '#/components/parameters/UserID'}]
+    get:
+      tags: [Admin]
+      description: Get platform user details. Requires platform_role=superadmin.
+      responses: {"200": {$ref: '#/components/responses/AdminUser'}, "401": {$ref: '#/components/responses/Error'}, "403": {$ref: '#/components/responses/Error'}, "404": {$ref: '#/components/responses/Error'}}
+    delete:
+      tags: [Admin]
+      description: Soft-delete a regular user account. Data is retained for recovery.
+      responses: {"204": {description: Deleted}, "401": {$ref: '#/components/responses/Error'}, "403": {$ref: '#/components/responses/Error'}, "404": {$ref: '#/components/responses/Error'}}
+  /api/v1/admin/users/{userID}/status:
+    parameters: [{$ref: '#/components/parameters/UserID'}]
+    patch:
+      tags: [Admin]
+      description: Activate or deactivate a regular user account. Superadmin accounts cannot be changed through this endpoint.
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AdminStatusUpdate'}}}}
+      responses: {"200": {$ref: '#/components/responses/AdminUser'}, "401": {$ref: '#/components/responses/Error'}, "403": {$ref: '#/components/responses/Error'}, "404": {$ref: '#/components/responses/Error'}, "409": {$ref: '#/components/responses/Error'}, "422": {$ref: '#/components/responses/Error'}}
+  /api/v1/admin/users/{userID}/restore:
+    parameters: [{$ref: '#/components/parameters/UserID'}]
+    post:
+      tags: [Admin]
+      description: Restore a soft-deleted regular user account.
+      responses: {"200": {$ref: '#/components/responses/AdminUser'}, "401": {$ref: '#/components/responses/Error'}, "403": {$ref: '#/components/responses/Error'}, "404": {$ref: '#/components/responses/Error'}}
   /api/v1/projects:
     get:
       tags: [Projects]
@@ -88,7 +127,6 @@ paths:
       tags: [Issues]
       parameters:
         - {name: search, in: query, schema: {type: string}}
-        - {name: status, in: query, description: Comma-separated statuses, schema: {type: string}}
         - {name: priority, in: query, schema: {$ref: '#/components/schemas/Priority'}}
         - {name: type, in: query, schema: {$ref: '#/components/schemas/IssueType'}}
         - {name: assignee_id, in: query, schema: {type: string, format: uuid}}
@@ -141,7 +179,10 @@ components:
     LoginRequest: {type: object, required: [email, password], properties: {email: {type: string, format: email}, password: {type: string, format: password}}}
     ProfileUpdate: {type: object, properties: {name: {type: string}, avatar_url: {type: string, nullable: true}}}
     PasswordUpdate: {type: object, required: [current_password, new_password], properties: {current_password: {type: string, format: password}, new_password: {type: string, minLength: 8, format: password}}}
-    User: {type: object, properties: {id: {type: string, format: uuid}, name: {type: string}, email: {type: string, format: email}, avatar_url: {type: string, nullable: true}, created_at: {type: string, format: date-time}, updated_at: {type: string, format: date-time}}}
+    User: {type: object, properties: {id: {type: string, format: uuid}, name: {type: string}, email: {type: string, format: email}, avatar_url: {type: string, nullable: true}, platform_role: {type: string, enum: [user, superadmin]}, is_active: {type: boolean}, last_login_at: {type: string, format: date-time, nullable: true}, created_at: {type: string, format: date-time}, updated_at: {type: string, format: date-time}}}
+    AdminStatusUpdate: {type: object, required: [is_active], properties: {is_active: {type: boolean}, reason: {type: string, maxLength: 500}}}
+    AdminUser: {type: object, properties: {id: {type: string, format: uuid}, name: {type: string}, email: {type: string, format: email}, avatar_url: {type: string, nullable: true}, platform_role: {type: string, enum: [user, superadmin]}, is_active: {type: boolean}, last_login_at: {type: string, format: date-time, nullable: true}, deactivated_at: {type: string, format: date-time, nullable: true}, deactivation_reason: {type: string, nullable: true}, deleted_at: {type: string, format: date-time, nullable: true}, created_at: {type: string, format: date-time}, owned_projects: {type: integer}, member_projects: {type: integer}, reported_issues: {type: integer}}}
+    AdminOverview: {type: object, properties: {total_users: {type: integer}, active_users: {type: integer}, inactive_users: {type: integer}, deleted_users: {type: integer}, new_users_7d: {type: integer}, active_users_7d: {type: integer}, total_projects: {type: integer}, active_issues: {type: integer}}}
     Login: {type: object, properties: {access_token: {type: string}, token_type: {type: string, example: Bearer}, expires_in: {type: integer}, user: {$ref: '#/components/schemas/User'}}}
     ProjectCreate: {type: object, required: [name, key], properties: {name: {type: string}, key: {type: string, example: WEB}, description: {type: string}}}
     ProjectUpdate: {type: object, properties: {name: {type: string}, description: {type: string}}}
@@ -164,6 +205,9 @@ components:
     Health: {description: Healthy, content: {application/json: {schema: {type: object}}}}
     Ready: {description: Ready, content: {application/json: {schema: {type: object}}}}
     User: {description: User, content: {application/json: {schema: {type: object, properties: {data: {$ref: '#/components/schemas/User'}}}}}}
+    AdminOverview: {description: Admin overview, content: {application/json: {schema: {type: object, properties: {data: {$ref: '#/components/schemas/AdminOverview'}}}}}}
+    AdminUser: {description: Admin user, content: {application/json: {schema: {type: object, properties: {data: {$ref: '#/components/schemas/AdminUser'}}}}}}
+    AdminUserCollection: {description: Admin users, content: {application/json: {schema: {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/AdminUser'}}, meta: {$ref: '#/components/schemas/Meta'}}}}}}
     Login: {description: Token, content: {application/json: {schema: {type: object, properties: {data: {$ref: '#/components/schemas/Login'}}}}}}
     Project: {description: Project, content: {application/json: {schema: {type: object, properties: {data: {$ref: '#/components/schemas/Project'}}}}}}
     Member: {description: Member, content: {application/json: {schema: {type: object, properties: {data: {$ref: '#/components/schemas/Member'}}}}}}
