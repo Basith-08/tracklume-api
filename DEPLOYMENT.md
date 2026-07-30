@@ -99,6 +99,23 @@ unset ADMIN_BOOTSTRAP_PASSWORD
 
 API tidak membuat superadmin otomatis. Endpoint `/api/v1/admin/*` hanya dapat dipakai oleh akun ini; akun regular tetap dibuat melalui endpoint register.
 
+Jika instance ini memang ingin menyediakan demo publik, jalankan seeder secara manual setelah superadmin dibuat:
+
+```bash
+docker compose run --rm --no-deps \
+  -e ALLOW_DEMO_SEED=true \
+  --entrypoint /app/tracklume-seed api
+```
+
+Seeder production memerlukan `ALLOW_DEMO_SEED=true` sebagai konfirmasi eksplisit dan membuat:
+
+```text
+owner@tracklume.local  / Password123!
+member@tracklume.local / Password123!
+```
+
+Jangan menjalankan langkah ini pada instance yang menyimpan data privat atau tenant sebenarnya.
+
 Verifikasi:
 
 ```bash

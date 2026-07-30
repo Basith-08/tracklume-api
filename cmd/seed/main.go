@@ -13,6 +13,9 @@ import (
 )
 
 func main() {
+	if os.Getenv("APP_ENV") == "production" && os.Getenv("ALLOW_DEMO_SEED") != "true" {
+		log.Fatal("refusing to seed demo data in production; set ALLOW_DEMO_SEED=true for an explicit one-time seed")
+	}
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		dsn = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", env("POSTGRES_USER", "tracklume"), os.Getenv("POSTGRES_PASSWORD"), env("DB_HOST", "localhost"), env("DB_PORT", "5432"), env("POSTGRES_DB", "tracklume"), env("DB_SSLMODE", "disable"))
@@ -42,10 +45,10 @@ func main() {
 	defer tx.Rollback(ctx)
 	ownerID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("tracklume-owner"))
 	memberID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("tracklume-member"))
-	if _, err = tx.Exec(ctx, `INSERT INTO users(id,name,email,password_hash) VALUES($1,'Tracklume Owner','owner@tracklume.local',$2) ON CONFLICT(email) DO UPDATE SET name=EXCLUDED.name,password_hash=EXCLUDED.password_hash`, ownerID, ownerHash); err != nil {
+	if _, err = tx.Exec(ctx, `INSERT INTO users(id,name,email,password_hash) VALUES($1,'Tracklume Owner','owner@tracklume.local',$2) ON CONFLICT(email) DO UPDATE SET name=EXCLUDED.name,password_hash=EXCLUDED.password_hash,is_active=true,deactivated_at=NULL,deactivation_reason=NULL,deleted_at=NULL`, ownerID, ownerHash); err != nil {
 		log.Fatal(err)
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO users(id,name,email,password_hash) VALUES($1,'Tracklume Member','member@tracklume.local',$2) ON CONFLICT(email) DO UPDATE SET name=EXCLUDED.name,password_hash=EXCLUDED.password_hash`, memberID, memberHash); err != nil {
+	if _, err = tx.Exec(ctx, `INSERT INTO users(id,name,email,password_hash) VALUES($1,'Tracklume Member','member@tracklume.local',$2) ON CONFLICT(email) DO UPDATE SET name=EXCLUDED.name,password_hash=EXCLUDED.password_hash,is_active=true,deactivated_at=NULL,deactivation_reason=NULL,deleted_at=NULL`, memberID, memberHash); err != nil {
 		log.Fatal(err)
 	}
 	if err = tx.QueryRow(ctx, `SELECT id FROM users WHERE email='owner@tracklume.local'`).Scan(&ownerID); err != nil {

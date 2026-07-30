@@ -340,7 +340,7 @@ Migration `003` menambahkan `users.deleted_at` untuk soft delete akun tanpa meru
 
 Nomor issue dibuat per project secara atomic sehingga identifier berbentuk `PROJECTKEY-1`, `PROJECTKEY-2`, dan seterusnya tanpa race condition.
 
-Seeder hanya untuk development, bersifat idempotent, dan tidak dijalankan otomatis pada production.
+Seeder bersifat idempotent dan tidak dijalankan otomatis pada production. Production harus diberi opt-in eksplisit karena kredensial demo bersifat publik.
 
 ## Testing
 
@@ -392,7 +392,15 @@ Owner:  owner@tracklume.local / Password123!
 Member: member@tracklume.local / Password123!
 ```
 
-Credential tersebut hanya untuk local demo. Jangan gunakan di production.
+Untuk membuat akun demo di production secara sadar:
+
+```bash
+docker compose run --rm --no-deps \
+  -e ALLOW_DEMO_SEED=true \
+  --entrypoint /app/tracklume-seed api
+```
+
+Jalankan setelah migration dan database siap. Credential tersebut publik dan hanya cocok untuk environment demo; jangan gunakan jika instance production berisi data sensitif.
 
 ## Batas MVP
 
