@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Basith-08/tracklume-api/internal/admin"
 	"github.com/Basith-08/tracklume-api/internal/auth"
 	"github.com/Basith-08/tracklume-api/internal/config"
 	"github.com/Basith-08/tracklume-api/internal/dashboard"
@@ -21,7 +22,9 @@ import (
 
 func NewRouter(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.Handler {
 	tokens := security.NewTokenManager(cfg.JWTSecret, cfg.JWTExpiration)
-	authHandler := auth.NewHandler(auth.NewService(auth.NewRepository(pool), tokens))
+	authRepo := auth.NewRepository(pool)
+	authHandler := auth.NewHandler(auth.NewService(authRepo, tokens))
+	adminHandler := admin.NewHandler(admin.NewService(admin.NewRepository(pool)))
 	projectService := project.NewService(project.NewRepository(pool))
 	projectHandler := project.NewHandler(projectService)
 	issueHandler := issue.NewHandler(issue.NewService(issue.NewRepository(pool), projectService, pool))
@@ -49,10 +52,18 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.
 			r.Post("/login", authHandler.Login)
 		})
 		api.Group(func(secured chi.Router) {
-			secured.Use(func(next http.Handler) http.Handler { return middleware.Authenticate(tokens, next) })
+			secured.Use(func(next http.Handler) http.Handler { return middleware.Authenticate(tokens, authRepo, next) })
 			secured.Get("/me", authHandler.Me)
 			secured.Patch("/me", authHandler.UpdateMe)
 			secured.Put("/me/password", authHandler.ChangePassword)
+			secured.Route("/admin", func(a chi.Router) {
+				a.Get("/overview", adminHandler.Overview)
+				a.Get("/users", adminHandler.ListUsers)
+				a.Get("/users/{userID}", adminHandler.GetUser)
+				a.Patch("/users/{userID}/status", adminHandler.UpdateStatus)
+				a.Delete("/users/{userID}", adminHandler.DeleteUser)
+				a.Post("/users/{userID}/restore", adminHandler.RestoreUser)
+			})
 			secured.Get("/projects", projectHandler.List)
 			secured.Post("/projects", projectHandler.Create)
 			secured.Get("/projects/{projectID}", projectHandler.Get)

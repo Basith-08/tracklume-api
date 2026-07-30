@@ -99,6 +99,8 @@ func (h *Handler) writeServiceError(w http.ResponseWriter, r *http.Request, err 
 		response.WriteError(w, r, 409, "CONFLICT", "Resource already exists", nil)
 	case errors.Is(err, app.ErrUnauthorized):
 		response.WriteError(w, r, 401, "UNAUTHORIZED", "Invalid email or password", nil)
+	case errors.Is(err, app.ErrInactive):
+		response.WriteError(w, r, 403, "ACCOUNT_INACTIVE", "This account is inactive. Please contact support.", nil)
 	case errors.Is(err, app.ErrNotFound):
 		response.WriteError(w, r, 404, "NOT_FOUND", "Resource not found", nil)
 	default:

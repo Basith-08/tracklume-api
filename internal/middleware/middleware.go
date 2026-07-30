@@ -16,6 +16,10 @@ import (
 
 type contextKey string
 
+type AccountStatusChecker interface {
+	IsActive(context.Context, uuid.UUID) (bool, error)
+}
+
 const userIDKey contextKey = "authenticated_user_id"
 const requestIDKey contextKey = "request_id"
 
@@ -42,7 +46,7 @@ func UserIDFromContext(ctx context.Context) (uuid.UUID, bool) {
 	return id, ok && id != uuid.Nil
 }
 
-func Authenticate(tokens *security.TokenManager, next http.Handler) http.Handler {
+func Authenticate(tokens *security.TokenManager, checker AccountStatusChecker, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		value := r.Header.Get("Authorization")
 		parts := strings.Fields(value)
@@ -54,6 +58,13 @@ func Authenticate(tokens *security.TokenManager, next http.Handler) http.Handler
 		if err != nil {
 			response.WriteError(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "Authentication is required", nil)
 			return
+		}
+		if checker != nil {
+			active, checkErr := checker.IsActive(r.Context(), userID)
+			if checkErr != nil || !active {
+				response.WriteError(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "Authentication is required", nil)
+				return
+			}
 		}
 		ctx := context.WithValue(r.Context(), userIDKey, userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
