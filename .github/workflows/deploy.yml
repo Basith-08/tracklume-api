@@ -38,10 +38,10 @@ jobs:
           --health-timeout=5s
           --health-retries=5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.sha || github.sha }}
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -65,13 +65,13 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.sha || github.sha }}
       - name: Resolve deploy SHA
         id: sha
         run: echo "sha=${{ inputs.sha || github.sha }}" >> "$GITHUB_OUTPUT"
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -86,7 +86,7 @@ jobs:
           docker build --pull -t "$image" .
           docker push "$image"
       - name: Prepare deployment directory
-        uses: appleboy/ssh-action@v1.2.2
+        uses: appleboy/ssh-action@v1.2.5
         env:
           PROD_APP_DIR: ${{ secrets.PROD_APP_DIR }}
         with:
@@ -98,7 +98,7 @@ jobs:
             set -eu
             mkdir -p "$PROD_APP_DIR"
       - name: Upload deployment files
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_DEPLOY_USER }}
@@ -107,7 +107,7 @@ jobs:
           target: ${{ secrets.PROD_APP_DIR }}
           overwrite: true
       - name: Deploy to production
-        uses: appleboy/ssh-action@v1.2.2
+        uses: appleboy/ssh-action@v1.2.5
         env:
           PROD_APP_DIR: ${{ secrets.PROD_APP_DIR }}
           IMAGE_TAG: ${{ steps.sha.outputs.sha }}
