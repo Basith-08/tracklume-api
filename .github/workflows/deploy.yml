@@ -1,0 +1,89 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit SHA to redeploy (rollback)"
+        required: false
+
+concurrency:
+  group: deploy-tracklume-api
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run tests
+        run: |
+          source build.env
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/app" \
+            -w /app \
+            "$BUILD_IMAGE" \
+            sh -c "$INSTALL_COMMAND && $TEST_COMMAND"
+
+  build-and-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Resolve deploy SHA
+        id: sha
+        run: echo "sha=${{ inputs.sha || github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Normalize image owner
+        id: image
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: echo "owner=$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        run: |
+          source build.env
+          image="ghcr.io/${{ steps.image.outputs.owner }}/tracklume-api:${{ steps.sha.outputs.sha }}"
+          docker build --pull \
+            --file "$DOCKERFILE" \
+            --build-arg "BUILD_IMAGE=$BUILD_IMAGE" \
+            --build-arg "RUNTIME_IMAGE=$RUNTIME_IMAGE" \
+            --build-arg "INSTALL_COMMAND=$INSTALL_COMMAND" \
+            --build-arg "BUILD_COMMAND=$BUILD_COMMAND" \
+            --build-arg "RUNTIME_PREPARE_COMMAND=$RUNTIME_PREPARE_COMMAND" \
+            --build-arg "START_COMMAND=$START_COMMAND" \
+            --build-arg "HEALTHCHECK_COMMAND=$HEALTHCHECK_COMMAND" \
+            -t "$image" .
+          docker push "$image"
+
+      - name: Deploy to production
+        uses: appleboy/ssh-action@v1
+        env:
+          IMAGE_TAG: ${{ steps.sha.outputs.sha }}
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_DEPLOY_USER }}
+          key: ${{ secrets.PROD_DEPLOY_KEY }}
+          envs: IMAGE_TAG
+          script: |
+            set -eu
+            cd /srv/apps/tracklume-api
+            sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=$IMAGE_TAG|" .env
+            docker compose pull
+            docker compose up -d
